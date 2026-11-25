@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: riskgraph-db
+    environment:
+      POSTGRES_DB: riskgraph
+      POSTGRES_USER: ccdev
+      POSTGRES_PASSWORD: ccdev
+      TZ: Asia/Shanghai
+    ports:
+      - "5433:5432"   # 宿主机 5433，避免与本机已装 PostgreSQL 冲突
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ccdev -d riskgraph"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: riskgraph-app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg2://ccdev:ccdev@db:5432/riskgraph
+      STATIC_DIR: /app/frontend/dist
+      DEFAULT_CUTOFF: "2026-03-31"
+      TZ: Asia/Shanghai
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health',timeout=3).status==200 else 1)"]
+      interval: 8s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  pgdata:
